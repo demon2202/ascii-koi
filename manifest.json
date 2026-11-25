@@ -1,0 +1,8 @@
+{
+  "manifest_version": 3,
+  "name": "ASCII Koi",
+  "version": "1.0.0",
+  "description": "Your new tab is a koi pond drawn in text. Right-click: feed the koi.",
+  "permissions": ["favicon", "storage"],
+  "chrome_url_overrides": { "newtab": "index.html" }
+}
