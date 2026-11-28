@@ -1,4 +1,4 @@
-﻿/*
+/*
  * ASCII Koi: a koi pond drawn in character cells.
  *
  * Each koi is a chain of spine nodes that trails its head, plus a travelling
@@ -391,10 +391,9 @@
         const p = pads[i];
         /* the flower opens with the day and breathes between bud and bloom on its own rhythm; it closes at night */
         if (p.lotus) {
-          const daily = skyOn ? sstep(0.2, 0.6, skyState.day) : 1;
-          const breath = 0.5 + 0.5 * Math.sin(t / p.per * Math.PI * 2 + p.cyc);
-          const want = daily * sstep(0.12, 0.42, breath), was = p.open;
-          p.open = clamp(p.open + clamp(want - p.open, -dt * 0.13, dt * 0.13), 0, 1);
+          /* lotus stays in full bloom always — no bud or partial-open phase */
+          const was = p.open;
+          p.open = clamp(p.open + clamp(1 - p.open, -dt * 0.18, dt * 0.18), 0, 1);
           p.nextPetal -= dt;
           if (p.open > 0.8 && p.nextPetal <= 0) { p.nextPetal = 7 + rnd() * 12; shedPetal(p); }
           if (was > 0.85 && p.open <= 0.85 && p.open < was) { shedPetal(p); shedPetal(p); }
@@ -1474,18 +1473,47 @@
     function drawDragon() {
       const d = dragon;
       if (!d || d.st === "away") return;
-      const bodyC = pack(P.dark ? [36, 196, 214] : [8, 108, 134]), wingC = pack(P.dark ? [226, 244, 250] : [70, 112, 132]), dark = pack([8, 40, 52]);
-      const ux = Math.cos(d.a), uy = Math.sin(d.a), flying = d.st !== "rest", fl = Math.floor(d.flap) & 1;
-      put(183, pack([0, 0, 0]), d.x + 5, d.y + 8, 0.35);
-      /* wings first, so the body lies over them: two pairs spread to either side of the thorax */
-      const px = -uy, py = ux;
-      for (const sd of [-1, 1]) for (let k = 1; k <= 2; k++) for (let r = 0; r < 2; r++) {
-        const wx = d.x - ux * cw * (0.3 + r * 0.9) + px * sd * cw * (0.9 + k * 0.9 - (r ? 0.3 : 0)), wy = d.y - uy * ch * (0.3 + r * 0.9) + py * sd * ch * (0.8 + k * 0.8);
-        putTile(wingC, wx, wy, (flying ? (fl ^ r ? 0.42 : 0.22) : 0.5));
-        put(flying ? (fl ^ r ? 120 : 43) : 45, wingC, wx, wy, flying ? 0.55 : 0.8);
+      const flying = d.st !== "rest", fl = Math.floor(d.flap) & 1;
+      /* wing alpha: flapping wings are more transparent than stationary ones */
+      const wA = flying ? (fl ? 0.55 : 0.28) : 0.75;
+      /* iridescent body colours */
+      const bodyC  = P.dark ? [32, 210, 230] : [8,  120, 148];
+      const bodyDk  = P.dark ? [12,  90, 108] : [4,   56,  80]; /* darker underside / tail segments */
+      const headC  = P.dark ? [20, 240, 210] : [10, 148, 128];
+      const wingC  = P.dark ? [200, 240, 255] : [120, 180, 210];
+      const wingVn = P.dark ? [160, 220, 240] : [ 90, 150, 180]; /* wing vein shade */
+      const eyeC   = [32, 32, 32];
+      /* build a paintCritter parts list oriented head-forward (u axis = forward) */
+      const parts = [
+        /* compound eyes — two dark bulges on either side of head */
+        { u: 2.1, v: -0.55, ru: 0.35, rv: 0.35, col: eyeC,   eye: true },
+        { u: 2.1, v:  0.55, ru: 0.35, rv: 0.35, col: eyeC,   eye: true },
+        /* head */
+        { u: 1.9, v: 0,     ru: 0.65, rv: 0.60, col: headC },
+        /* thorax (widest part — where wings attach) */
+        { u: 0.9, v: 0,     ru: 0.80, rv: 0.72, col: bodyC },
+        /* abdomen segments — 3 progressively narrowing segments */
+        { u: -0.3, v: 0,    ru: 0.65, rv: 0.52, col: bodyC  },
+        { u: -1.4, v: 0,    ru: 0.52, rv: 0.38, col: bodyDk },
+        { u: -2.3, v: 0,    ru: 0.38, rv: 0.26, col: bodyDk },
+        { u: -3.0, v: 0,    ru: 0.24, rv: 0.18, col: bodyDk }, /* tail tip */
+        /* forewing pair — angled slightly back */
+        { u: 0.7, v: -1.6, ru: 1.4, rv: 0.38, col: wingC,  rot:  0.18 },
+        { u: 0.7, v:  1.6, ru: 1.4, rv: 0.38, col: wingC,  rot: -0.18 },
+        /* hindwing pair — slightly shorter, offset further back */
+        { u: 0.1, v: -1.3, ru: 1.1, rv: 0.3,  col: wingVn, rot:  0.22 },
+        { u: 0.1, v:  1.3, ru: 1.1, rv: 0.3,  col: wingVn, rot: -0.22 },
+      ];
+      /* flapping: when fl=1, narrow the wings on the upstroke */
+      if (flying && fl) {
+        parts[8].rv  = 0.14; parts[9].rv  = 0.14;
+        parts[10].rv = 0.11; parts[11].rv = 0.11;
       }
-      putTile(bodyC, d.x, d.y, 1); put(111, dark, d.x, d.y, 0.95);
-      for (let k = 1; k <= 3; k++) { putTile(bodyC, d.x - ux * cw * k * 0.95, d.y - uy * ch * k * 0.95, k === 3 ? 0.75 : 0.95); put(k === 1 ? 35 : 45, dark, d.x - ux * cw * k * 0.95, d.y - uy * ch * k * 0.95, 0.6); }
+      const a = 6.5 * K;
+      /* shadow a little offset below-right */
+      paintCritter(parts, d.x + 4, d.y + 5, d.a, a, 0.9, true);
+      /* the dragonfly itself */
+      paintCritter(parts, d.x, d.y, d.a, a, 1, false);
     }
 
     /* night: the moon's reflection broken by the water, and fireflies over it */
@@ -1621,7 +1649,7 @@
         if (!n) continue;
         const m = parts[first], cover = n / 5;
         if (shadowOnly) {
-          if (!pure) { ctx.globalAlpha = (P.dark ? 0.3 : 0.07) * dm * Math.min(1, cover * 1.5); ctx.fillStyle = shadeFill; ctx.fillRect(sn(x + gap + cw * 0.35), sn(y + gap + ch * 0.35), cw - 2 * gap, ch - 2 * gap); }
+          if (!pure) { ctx.globalAlpha = (P.dark ? 0.38 : 0.12) * dm * Math.min(1, cover * 1.5); ctx.fillStyle = shadeFill; ctx.fillRect(sn(x + gap + cw * 0.35), sn(y + gap + ch * 0.35), cw - 2 * gap, ch - 2 * gap); }
           continue;
         }
         /* a pseudo-normal for light from the upper left */
@@ -1633,10 +1661,12 @@
           glyphAt((m.eye ? 111 : lumRamp(tile).charCodeAt(0)), pack(P.dark ? mul(tile, 1.12) : mul(tile, 0.85)), x + cw / 2, y + ch / 2);
           continue;
         }
-        ctx.globalAlpha = 0.97 * dm * (cover >= 0.4 ? 1 : cover * 1.8); ctx.fillStyle = css(pack(edge && P.dark ? mul(tile, 0.8) : tile));
+        /* rim cells get a noticeably darker shade so each creature has a visible silhouette boundary */
+        const drawCol = edge ? mul(m.col, P.dark ? 0.55 : 0.42) : tile;
+        ctx.globalAlpha = 0.97 * dm * (cover >= 0.4 ? 1 : cover * 1.8); ctx.fillStyle = css(pack(drawCol));
         const x0 = sn(x + gap), y0 = sn(y + gap); ctx.fillRect(x0, y0, sn(x + cw - gap) - x0, sn(y + ch - gap) - y0);
-        ctx.globalAlpha = (m.eye ? 0.95 : (P.dark ? 0.4 : 0.18)) * dm;
-        glyphAt(m.eye ? 111 : lumRamp(tile).charCodeAt(0), pack(m.eye ? [30, 26, 20] : mul(m.col, P.dark ? 0.5 : 0.4)), x + cw / 2, y + ch / 2);
+        ctx.globalAlpha = (m.eye ? 0.95 : (edge ? (P.dark ? 0.65 : 0.55) : (P.dark ? 0.4 : 0.22))) * dm;
+        glyphAt(m.eye ? 111 : lumRamp(tile).charCodeAt(0), pack(m.eye ? [30, 26, 20] : mul(m.col, P.dark ? 0.42 : 0.32)), x + cw / 2, y + ch / 2);
       }
     }
     const probeN = { nu: 0, nv: 0, q: 0 };
@@ -1644,8 +1674,13 @@
     /* the frog: sits on a leaf (the one without a flower when there is one), hops about it, blinks and croaks */
     const FROG_G = [[56, 108, 50], [76, 130, 60]];
     function frogParts(croak, hop, tongue = 0) {
-      const body = P.dark ? [118, 184, 72] : [84, 150, 52], head = P.dark ? [146, 206, 88] : [104, 170, 62], leg = P.dark ? [88, 146, 58] : [60, 112, 44];
-      const spot = P.dark ? [58, 104, 44] : [40, 84, 34], eye = [244, 206, 76], pupil = [16, 20, 14], throat = [220, 230, 156];
+      /* vibrant, high-contrast colours — darker underside/legs vs bright body, to stand out against the pad */
+      const body  = P.dark ? [82, 190, 58]  : [52, 158, 32];   /* vivid lime-green body */
+      const head  = P.dark ? [112, 220, 78] : [72, 188, 48];   /* slightly lighter head */
+      const leg   = P.dark ? [44, 128, 36]  : [28, 98, 20];    /* dark olive legs for depth */
+      const belly = P.dark ? [168, 220, 100]: [128, 180, 70];  /* pale lime belly highlight */
+      const spot  = P.dark ? [26, 86, 22]   : [18, 66, 14];    /* very dark spots for contrast */
+      const eye = [252, 220, 60], pupil = [10, 12, 8], throat = [210, 230, 140];
       const fl = hop ? 1.5 : 0.9;
       const sac = croak > 0.08 ? [{ u: 1.0 + 0.2 * croak, v: 0, ru: 0.55 + 0.3 * croak, rv: 0.5 + 0.3 * croak, col: throat }] : [];
       const flick = tongue > 0.05 ? [
@@ -1654,15 +1689,17 @@
       ] : [];
       return [
         { u: 1.48, v: -0.66, ru: 0.18, rv: 0.18, col: pupil, eye: true }, { u: 1.48, v: 0.66, ru: 0.18, rv: 0.18, col: pupil, eye: true },
-        { u: 1.4, v: -0.66, ru: 0.42, rv: 0.42, col: eye, eye: true }, { u: 1.4, v: 0.66, ru: 0.42, rv: 0.42, col: eye, eye: true },
+        { u: 1.4, v: -0.66, ru: 0.44, rv: 0.44, col: eye, eye: true }, { u: 1.4, v: 0.66, ru: 0.44, rv: 0.44, col: eye, eye: true },
         { u: 1.88, v: -0.22, ru: 0.14, rv: 0.14, col: pupil }, { u: 1.88, v: 0.22, ru: 0.14, rv: 0.14, col: pupil },
         ...flick,
         ...sac,
-        { u: -0.2, v: -0.42, ru: 0.28, rv: 0.22, col: spot }, { u: -0.45, v: 0.38, ru: 0.26, rv: 0.2, col: spot },
-        { u: 1.15, v: 0, ru: 0.95, rv: 0.9, col: head },
-        { u: -0.1, v: 0, ru: 1.5, rv: 1.1, col: body },
-        { u: 0.7, v: -1.3, ru: 0.8, rv: 0.3, col: leg, rot: 0.5 }, { u: 0.7, v: 1.3, ru: 0.8, rv: 0.3, col: leg, rot: -0.5 },
-        { u: -1.0, v: -1.25 * fl, ru: 1.3, rv: 0.5, col: leg, rot: -0.55 }, { u: -1.0, v: 1.25 * fl, ru: 1.3, rv: 0.5, col: leg, rot: 0.55 }
+        { u: -0.2, v: -0.42, ru: 0.3, rv: 0.24, col: spot }, { u: -0.45, v: 0.38, ru: 0.28, rv: 0.22, col: spot },
+        /* belly stripe — lighter patch down the centre for a 3-D look */
+        { u: 0.4, v: 0, ru: 0.6, rv: 0.42, col: belly },
+        { u: 1.15, v: 0, ru: 0.98, rv: 0.92, col: head },
+        { u: -0.1, v: 0, ru: 1.52, rv: 1.12, col: body },
+        { u: 0.7, v: -1.3, ru: 0.82, rv: 0.3, col: leg, rot: 0.5 }, { u: 0.7, v: 1.3, ru: 0.82, rv: 0.3, col: leg, rot: -0.5 },
+        { u: -1.0, v: -1.25 * fl, ru: 1.32, rv: 0.52, col: leg, rot: -0.55 }, { u: -1.0, v: 1.25 * fl, ru: 1.32, rv: 0.52, col: leg, rot: 0.55 }
       ];
     }
     function frogPad() { return pads.find(p => !p.lotus) || null; }
@@ -1741,7 +1778,7 @@
     function drawFrog() {
       const f = frog;
       if (!f) return;
-      const pp = padPos(f.pad), a = pp.R * 0.25;
+      const pp = padPos(f.pad), a = pp.R * 0.28;  /* slightly larger than before for more coverage */
       let x, y, lift = 0, jumping = false;
       if (f.state === "hopOut") {
         const u = Math.min(1, f.hop), e = u * u * (3 - 2 * u);
@@ -1758,7 +1795,8 @@
         if (f.hop >= 0) { lift = Math.sin(Math.min(1, f.hop) * Math.PI) * 14 * K; jumping = true; }
       }
       const parts = frogParts(f.croak, jumping, f.tongue);
-      if (f.state !== "swim") paintCritter(parts, x, y, f.ang, a, 1, true);
+      /* shadow offset a full cell down-right so it clears the pad surface and is visible */
+      if (f.state !== "swim") paintCritter(parts, x + cw * 0.6, y + ch * 0.6, f.ang, a, 0.85, true);
       paintCritter(parts, x, y - lift, f.ang, a, 1, false);
     }
 
